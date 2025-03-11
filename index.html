@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>איש תלוי אונליין</title>
+
+  <!-- Firebase SDK Compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      background: #ECEFF1;
+      color: rgba(0,0,0,0.87);
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      direction: rtl;
+      text-align: center;
+    }
+    .container {
+      background: white;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+    }
+    h1 {
+      font-size: 24px;
+      color: #333;
+    }
+    p {
+      font-size: 16px;
+      margin: 10px 0;
+    }
+    input {
+      width: 80%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background: #039be5;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 2px;
+    }
+    button:hover {
+      background: #0288d1;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+    th {
+      background: #f5f5f5;
+    }
+    .hidden {
+      display: none;
+    }
+    #wordDisplay {
+      font-size: 36px;
+      letter-spacing: 5px;
+      margin: 20px 0;
+    }
+    #hangmanCanvas {
+      margin: 20px auto;
+    }
+    #keyboard {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 5px;
+      max-width: 600px;
+      margin: 20px auto;
+    }
+    #chat {
+      border: 1px solid #ccc;
+      height: 150px;
+      overflow-y: auto;
+      margin: 20px 0;
+      padding: 10px;
+      text-align: right;
+      background: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+  <!-- טופס התחברות/הרשמה -->
+  <div id="authContainer" class="container">
+    <h1>ברוכים הבאים לאיש תלוי אונליין</h1>
+    <p>התחבר או הירשם כדי להתחיל לשחק</p>
+    <input type="email" id="email" placeholder="מייל">
+    <input type="password" id="password" placeholder="סיסמה">
+    <input type="text" id="nickname" placeholder="כינוי">
+    <button onclick="signUp()">הירשם</button>
+    <button onclick="signIn()">התחבר</button>
+    <p id="status"></p>
+  </div>
+
+  <!-- דף הבית -->
+  <div id="homeContainer" class="container hidden">
+    <h1 id="welcomeMessage">ברוכים הבאים!</h1>
+    <button onclick="signOut()">התנתק</button>
+    <h2>טבלת מובילים</h2>
+    <table id="leaderboard">
+      <tr><th>כינוי</th><th>ניקוד</th></tr>
+    </table>
+    <h2>חדרי המתנה</h2>
+    <div id="lobbies"></div>
+    <button onclick="createLobby()">צור משחק חדש</button>
+  </div>
+
+  <!-- מסך המשחק -->
+  <div id="gameContainer" class="container hidden">
+    <h1>איש תלוי - משחק</h1>
+    <p id="gameStatus"></p>
+    <div id="wordDisplay"></div>
+    <canvas id="hangmanCanvas" width="200" height="200"></canvas>
+    <div id="keyboard"></div>
+    <div id="chat"></div>
+    <input type="text" id="chatInput" placeholder="כתוב הודעה">
+    <button onclick="sendChat()">שלח</button>
+    <button onclick="exitGame()">חזור לדף הבית</button>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBiKGygJc5u4tQeebDVCD8_AP1r6kgm4Lc",
+      authDomain: "hangmanonline-902ac.firebaseapp.com",
+      databaseURL: "https://hangmanonline-902ac-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "hangmanonline-902ac",
+      storageBucket: "hangmanonline-902ac.firebasestorage.app",
+      messagingSenderId: "577708158727",
+      appId: "1:577708158727:web:e1aafd176c77df7d801fa2"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const realtimeDb = firebase.database();
+
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+      console.log("מריץ ב-Emulator מקומי");
+      auth.useEmulator("http://localhost:9099");
+      db.useEmulator("localhost", 8080);
+      realtimeDb.useEmulator("localhost", 9000);
+    }
+
+    let currentLobbyId = null;
+    let currentUserNickname = null;
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        document.getElementById('authContainer').classList.add('hidden');
+        document.getElementById('homeContainer').classList.remove('hidden');
+        loadUserData(user);
+      } else {
+        document.getElementById('authContainer').classList.remove('hidden');
+        document.getElementById('homeContainer').classList.add('hidden');
+        document.getElementById('gameContainer').classList.add('hidden');
+      }
+    });
+
+    function signUp() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const nickname = document.getElementById('nickname').value;
+      if (!nickname) return document.getElementById('status').textContent = "אנא בחר כינוי";
+      auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => db.collection('users').doc(userCredential.user.uid).set({ nickname, score: 0 }))
+        .then(() => document.getElementById('status').textContent = "נרשמת בהצלחה!")
+        .catch((error) => document.getElementById('status').textContent = "שגיאה: " + error.message);
+    }
+
+    function signIn() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => document.getElementById('status').textContent = "התחברת בהצלחה!")
+        .catch((error) => document.getElementById('status').textContent = "שגיאה: " + error.message);
+    }
+
+    function signOut() {
+      auth.signOut();
+    }
+
+    function loadUserData(user) {
+      db.collection('users').doc(user.uid).get()
+        .then((doc) => {
+          if (doc.exists) {
+            currentUserNickname = doc.data().nickname;
+            document.getElementById('welcomeMessage').textContent = `ברוכים הבאים ${currentUserNickname}!`;
+            loadLeaderboard();
+            loadLobbies();
+          }
+        })
+        .catch((error) => console.error("שגיאה בטעינת משתמש:", error));
+    }
+
+    function loadLeaderboard() {
+      const leaderboard = document.getElementById('leaderboard');
+      leaderboard.innerHTML = '<tr><th>כינוי</th><th>ניקוד</th></tr>';
+      db.collection('users').orderBy('score', 'desc').limit(5).get()
+        .then((querySnapshot) => {
+          if (!querySnapshot.empty) querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            leaderboard.innerHTML += `<tr><td>${data.nickname}</td><td>${data.score}</td></tr>`;
+          });
+        })
+        .catch((error) => console.error("שגיאה בטעינת טבלת מובילים:", error));
+    }
+
+    function loadLobbies() {
+      const lobbiesDiv = document.getElementById('lobbies');
+      lobbiesDiv.innerHTML = '<p>טוען חדרים...</p>';
+      realtimeDb.ref('lobbies').on('value', (snapshot) => {
+        lobbiesDiv.innerHTML = '';
+        if (!snapshot.exists()) {
+          lobbiesDiv.innerHTML = '<p>אין חדרים פתוחים כרגע</p>';
+        } else {
+          snapshot.forEach((childSnapshot) => {
+            const lobby = childSnapshot.val();
+            const lobbyId = childSnapshot.key;
+            if (lobby.status === 'waiting' && lobby.creator !== currentUserNickname) {
+              lobbiesDiv.innerHTML += `<p>${lobby.creator} ממתין לשחקן - <button onclick="joinLobby('${lobbyId}')">הצטרף</button></p>`;
+            } else if (lobby.status === 'full' && lobby.players && lobby.players.includes(currentUserNickname)) {
+              startGame(lobbyId);
+            }
+          });
+        }
+      }, (error) => console.error("שגיאה בטעינת חדרים:", error));
+    }
+
+    function createLobby() {
+      if (!currentUserNickname) return alert("כינוי לא נטען עדיין");
+      const word = prompt("בחר מילה למשחק (רק אותיות עבריות):");
+      if (!word || !/^[א-תךםןףץ]+$/.test(word)) return alert("מילה לא תקינה");
+      const lobbyId = realtimeDb.ref('lobbies').push().key;
+      realtimeDb.ref('lobbies/' + lobbyId).set({
+        creator: currentUserNickname,
+        status: 'waiting',
+        players: [currentUserNickname],
+        word: word.toLowerCase(),
+        guesses: [],
+        mistakes: 0,
+        chat: []
+      }).then(() => {
+        currentLobbyId = lobbyId;
+        alert('חדר נוצר! ממתין לשחקן שני...');
+      }).catch((error) => console.error("שגיאה ביצירת חדר:", error));
+    }
+
+    function joinLobby(lobbyId) {
+      if (!currentUserNickname) return alert("כינוי לא נטען עדיין");
+      realtimeDb.ref('lobbies/' + lobbyId).transaction((lobby) => {
+        if (lobby && lobby.status === 'waiting' && !lobby.players.includes(currentUserNickname)) {
+          lobby.status = 'full';
+          lobby.players.push(currentUserNickname);
+        }
+        return lobby;
+      }).then((result) => {
+        if (result.committed) {
+          currentLobbyId = lobbyId;
+          startGame(lobbyId);
+        } else {
+          alert("לא ניתן להצטרף לחדר זה");
+        }
+      }).catch((error) => console.error("שגיאה בהצטרפות:", error));
+    }
+
+    function startGame(lobbyId) {
+      document.getElementById('homeContainer').classList.add('hidden');
+      document.getElementById('gameContainer').classList.remove('hidden');
+      loadGameState(lobbyId);
+    }
+
+    function loadGameState(lobbyId) {
+      const canvas = document.getElementById('hangmanCanvas');
+      const ctx = canvas.getContext('2d');
+      realtimeDb.ref('lobbies/' + lobbyId).on('value', (snapshot) => {
+        const lobby = snapshot.val();
+        if (!lobby) {
+          document.getElementById('gameStatus').textContent = "החדר נמחק";
+          return;
+        }
+
+        const word = lobby.word;
+        const guesses = lobby.guesses || [];
+        const mistakes = lobby.mistakes || 0;
+        const isCreator = lobby.creator === currentUserNickname;
+
+        // תצוגת המילה
+        let display = '';
+        for (let char of word) {
+          display += guesses.includes(char) ? char + ' ' : '_ ';
+        }
+        document.getElementById('wordDisplay').textContent = display.trim();
+
+        // אנימציית איש תלוי
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        // גרדום
+        ctx.beginPath();
+        ctx.moveTo(50, 180); ctx.lineTo(150, 180); // בסיס
+        ctx.moveTo(100, 180); ctx.lineTo(100, 20); // עמוד
+        ctx.moveTo(100, 20); ctx.lineTo(140, 20); // קורה עליונה
+        ctx.moveTo(140, 20); ctx.lineTo(140, 40); // חבל
+        ctx.stroke();
+        // איש
+        if (mistakes >= 1) { ctx.beginPath(); ctx.arc(140, 60, 20, 0, Math.PI * 2); ctx.stroke(); } // ראש
+        if (mistakes >= 2) { ctx.moveTo(140, 80); ctx.lineTo(140, 120); ctx.stroke(); } // גוף
+        if (mistakes >= 3) { ctx.moveTo(140, 90); ctx.lineTo(120, 110); ctx.stroke(); } // יד שמאל
+        if (mistakes >= 4) { ctx.moveTo(140, 90); ctx.lineTo(160, 110); ctx.stroke(); } // יד ימין
+        if (mistakes >= 5) { ctx.moveTo(140, 120); ctx.lineTo(120, 150); ctx.stroke(); } // רגל שמאל
+        if (mistakes >= 6) { ctx.moveTo(140, 120); ctx.lineTo(160, 150); ctx.stroke(); } // רגל ימין
+
+        // מקלדת
+        const keyboard = document.getElementById('keyboard');
+        keyboard.innerHTML = '';
+        const hebrewAlphabet = 'אבגדהוזחטיכלמנסעפצקרשתךםןףץ';
+        const isGameOver = mistakes >= 6 || !display.includes('_');
+        if (!isCreator && !isGameOver) {
+          for (let letter of hebrewAlphabet) {
+            if (!guesses.includes(letter)) {
+              const btn = document.createElement('button');
+              btn.textContent = letter;
+              btn.onclick = () => guessLetter(lobbyId, letter);
+              keyboard.appendChild(btn);
+            }
+          }
+        }
+
+        // סטטוס משחק
+        if (isCreator) {
+          document.getElementById('gameStatus').textContent = `מחכה ל-${lobby.players[1]} לנחש | טעויות: ${mistakes}/6`;
+        } else {
+          document.getElementById('gameStatus').textContent = mistakes >= 6 ? `הפסדת! המילה: ${word}` : (!display.includes('_') ? 'ניצחת!' : `טעויות: ${mistakes}/6`);
+          if (isGameOver && !isCreator) updateScore(mistakes >= 6 ? 0 : 10);
+        }
+
+        // צ'אט
+        const chat = document.getElementById('chat');
+        chat.innerHTML = '';
+        if (lobby.chat && lobby.chat.length > 0) {
+          lobby.chat.slice(-10).forEach(msg => {
+            chat.innerHTML += `<p><b>${msg.nickname}:</b> ${msg.text}</p>`;
+          });
+          chat.scrollTop = chat.scrollHeight;
+        }
+      }, (error) => console.error("שגיאה בטעינת משחק:", error));
+    }
+
+    function guessLetter(lobbyId, letter) {
+      realtimeDb.ref('lobbies/' + lobbyId).transaction((lobby) => {
+        if (lobby && lobby.status === 'full' && lobby.creator !== currentUserNickname) {
+          lobby.guesses = lobby.guesses || [];
+          if (!lobby.guesses.includes(letter)) {
+            lobby.guesses.push(letter);
+            if (!lobby.word.includes(letter)) lobby.mistakes = (lobby.mistakes || 0) + 1;
+          }
+        }
+        return lobby;
+      }).catch((error) => console.error("שגיאה בניחוש:", error));
+    }
+
+    function sendChat() {
+      const message = document.getElementById('chatInput').value.trim();
+      if (!message || !currentLobbyId || !currentUserNickname) return;
+      realtimeDb.ref('lobbies/' + currentLobbyId + '/chat').push({
+        nickname: currentUserNickname,
+        text: message,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+      }).then(() => {
+        document.getElementById('chatInput').value = '';
+      }).catch((error) => console.error("שגיאה בשליחת הודעה:", error));
+    }
+
+    function updateScore(points) {
+      const user = auth.currentUser;
+      if (user) {
+        db.collection('users').doc(user.uid).update({
+          score: firebase.firestore.FieldValue.increment(points)
+        }).catch((error) => console.error("שגיאה בעדכון ניקוד:", error));
+      }
+    }
+
+    function exitGame() {
+      if (currentLobbyId) {
+        realtimeDb.ref('lobbies/' + currentLobbyId).off();
+        realtimeDb.ref('lobbies/' + currentLobbyId).remove();
+        currentLobbyId = null;
+      }
+      document.getElementById('gameContainer').classList.add('hidden');
+      document.getElementById('homeContainer').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
