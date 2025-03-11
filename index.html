@@ -405,22 +405,32 @@
     connectionAlert.style.position = 'fixed';
     connectionAlert.style.bottom = '10px';
     connectionAlert.style.right = '10px';
-    connectionAlert.style.padding = '10px';
+    connectionAlert.style.padding = '15px';
     connectionAlert.style.background = '#f8d7da';
     connectionAlert.style.color = '#721c24';
     connectionAlert.style.borderRadius = '5px';
     connectionAlert.style.zIndex = '1000';
     connectionAlert.style.display = 'none';
-    connectionAlert.style.maxWidth = '300px';
+    connectionAlert.style.maxWidth = '350px';
+    connectionAlert.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
     connectionAlert.innerHTML = `
-      <p style="margin: 0"><strong>שגיאת חיבור לפיירבייס</strong></p>
-      <p style="margin: 5px 0">אם האתר מפורסם בדומיין חדש, עליך להוסיף את הדומיין להגדרות Firebase:</p>
-      <ol style="margin: 5px 0; padding-right: 20px;">
-        <li>היכנס לקונסולת Firebase</li>
-        <li>בחר את הפרויקט שלך</li>
-        <li>לך להגדרות > Authentication > Domains</li>
-        <li>הוסף את הדומיין: ${window.location.hostname}</li>
+      <p style="margin: 0; font-weight:bold; font-size:16px">עדיין אין חיבור לשרת</p>
+      <p style="margin: 5px 0">ייתכן שהבעיה היא באחד מהבאים:</p>
+      <ol style="margin: 5px 0; padding-right: 20px; text-align: right">
+        <li>הגבלת גישה ברשת או בפיירוול שלך</li>
+        <li>חסימת DNS של ספק האינטרנט</li>
+        <li>הגדרות Firebase לא מעודכנות</li>
       </ol>
+      <p style="margin: 5px 0; font-weight:bold">פתרונות אפשריים:</p>
+      <ol style="margin: 5px 0; padding-right: 20px; text-align: right">
+        <li>שנה את שרתי ה-DNS לשרתים ציבוריים (8.8.8.8 או 1.1.1.1)</li>
+        <li>נסה להתחבר דרך רשת אינטרנט אחרת (למשל חיבור סלולרי)</li>
+        <li>ודא שהדומיין ${window.location.hostname} מורשה ב-Firebase</li>
+      </ol>
+      <div style="margin-top:10px">
+        <button onclick="retryConnection()" style="background:#0275d8; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer">נסה שוב</button>
+        <button onclick="this.parentElement.parentElement.style.display='none'" style="background:#6c757d; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer">סגור</button>
+      </div>
     `;
     document.body.appendChild(connectionAlert);
 
@@ -531,18 +541,21 @@
             
             // הצג מידע מפורט על בעיית החיבור
             document.getElementById('lobbies').innerHTML = 
-              '<p>עדיין אין חיבור לשרת. <button onclick="retryConnection()" class="btn-primary">נסה שוב</button></p>' +
-              '<div id="firebaseConnectionError">' +
-              '<p><strong>מידע לפתרון בעיית החיבור:</strong></p>' +
-              '<p>הדומיין הנוכחי: <code>' + window.location.hostname + '</code></p>' +
-              '<p>יש להוסיף דומיין זה להגדרות Firebase:</p>' +
+              '<div style="background:#f8d7da; padding:15px; border-radius:8px; margin:10px 0; text-align:right">' +
+              '<p style="font-weight:bold; font-size:18px">אין חיבור לשרת</p>' +
+              '<p>ייתכן וזו בעיה באחת מהאפשרויות הבאות:</p>' +
               '<ol>' +
-              '<li>היכנס לקונסולת Firebase</li>' +
-              '<li>בחר את הפרויקט: hangmanonline-902ac</li>' +
-              '<li>לך ל-Authentication > Sign-in method > Authorized domains</li>' +
-              '<li>הוסף את הדומיין הנוכחי לרשימה</li>' +
+              '<li><strong>סינון אינטרנט:</strong> ייתכן שחיבור האינטרנט שלך חוסם גישה לשירותי Firebase</li>' +
+              '<li><strong>הגבלת DNS:</strong> ספק האינטרנט שלך עשוי לחסום את הדומיינים של Firebase</li>' +
+              '<li><strong>הגדרות Firebase:</strong> אולי צריך להוסיף את הדומיין הנוכחי להגדרות</li>' +
               '</ol>' +
-              '<p>גם ב-Realtime Database יש לוודא שכללי האבטחה מאפשרים גישה</p>' +
+              '<p><strong>הצעות לפתרון:</strong></p>' +
+              '<ol>' +
+              '<li>שנה את שרתי ה-DNS לשרתים ציבוריים (Google: 8.8.8.8 או Cloudflare: 1.1.1.1)</li>' +
+              '<li>נסה להשתמש ברשת אינטרנט אחרת (למשל חיבור סלולרי)</li>' +
+              '<li>אם אתה מנהל האתר, הוסף את הדומיין <code>' + window.location.hostname + '</code> להגדרות Firebase</li>' +
+              '</ol>' +
+              '<p><button onclick="retryConnection()" class="btn-primary">נסה להתחבר שוב</button></p>' +
               '</div>';
           }
         })
